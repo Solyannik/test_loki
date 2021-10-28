@@ -2,71 +2,7 @@ require 'mysql2/em'
 require 'eventmachine'
 require 'dotenv/load'
 require 'pry'
-
-class Correction
-  def initialize(value)
-    @name = value
-    @parts = []
-  end
-
-  def perform
-    change_words
-    delete_point
-    split_by_slash
-    add_parentheses
-    rotate_parts
-    normalize_string
-    @name
-  end
-
-private
-
-  def change_words
-    words = {
-      "Twp" => "Township",
-      "Hwy" => "Highway",
-      "CCH" => "Country Club Hills"
-    }
-    words.each { |k,v| @name.gsub!(k,v)}
-  end
-
-  def delete_point
-    @name.delete!('.')
-  end
-
-  def split_by_slash
-    @parts = @name.split('/').map(&:strip)
-  end
-
-  def add_parentheses
-    @parts = @parts.map do |part|
-      if part.include? ?,
-        comma_parts = part.split(',').map(&:strip)
-        comma_parts.first.downcase!
-        comma_parts[comma_parts.size-1] = comma_parts.last.prepend('(') << ')'
-        part = comma_parts.join(' ')
-      end
-      part
-    end
-  end
-
-  def rotate_parts
-    for _ in 1..@parts.size - 1 do
-      @parts = @parts.rotate(1)
-    end
-  end
-
-  def normalize_string
-    @parts.map { |i| i.downcase! } if @parts.size == 1
-    @parts.drop(1).map { |i| i.downcase! } if @parts.size > 1 && !@parts.join(' ').match(/[()]/)
-    @parts.insert(-2, 'and') if @parts.size > 2
-    @name = @parts.join(' ')
-    max = @name.scan(/\S+/).size
-    1.upto(max).each_with_object(@name) do |i, n|
-      n.gsub!(/((?:\b\s*[A-z]+){#{i}})\1/i, '\1')
-    end
-  end
-end
+require_relative 'lib/transformer'
 
 def partition(size)
   case size
@@ -109,7 +45,7 @@ EM.run do
     id = row['id']
     name = row['candidate_office_name']
 
-    clean_name = Correction.new(name).perform
+    clean_name = Transformer.new(name).perform
     sentence = "Candidate is running for the #{clean_name} office"
     update_query += "update hle_dev_test_osolyannik set clean_name=\"%s\", sentence=\"%s\" where id = %s;\n" % [clean_name, sentence, id.to_s]
 
